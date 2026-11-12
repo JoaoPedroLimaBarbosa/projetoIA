@@ -1,7 +1,10 @@
+
 """Aplicativo de classificação de países por prioridade de ajuda.
 
 Inteligência Artificial · Unidade III · UNIFSA · Engenharia de Software · 2026.2
 """
+
+from pathlib import Path
 import joblib
 import pandas as pd
 import streamlit as st
@@ -10,10 +13,22 @@ import streamlit as st
 st.set_page_config(page_title="Classificação de países", layout="centered")
 
 
-# 2. Carregamento do modelo (executado uma única vez e mantido em cache)
+# 2. Carregamento do modelo
 @st.cache_resource
 def carregar_modelo():
-    return joblib.load("modelo_paises.pkl")
+    # Procura o arquivo na mesma pasta deste app.py
+    caminho_modelo = Path(__file__).resolve().parent / "modelo_paises.pkl"
+
+    # Verifica se o arquivo existe
+    if not caminho_modelo.exists():
+        st.error("Não foi possível encontrar o arquivo modelo_paises.pkl.")
+        st.write("Pasta onde o aplicativo está procurando:")
+        st.code(str(caminho_modelo.parent))
+        st.write("Arquivos encontrados nessa pasta:")
+        st.write([arquivo.name for arquivo in caminho_modelo.parent.iterdir()])
+        st.stop()
+
+    return joblib.load(caminho_modelo)
 
 
 pacote = carregar_modelo()
@@ -21,7 +36,8 @@ modelo = pacote["modelo"]      # pipeline: StandardScaler -> PCA -> KMeans
 colunas = pacote["colunas"]    # ordem das colunas usada no treinamento
 nomes = pacote["nomes"]        # nome de cada grupo
 
-# 3. Descrição de cada campo: rótulo exibido e valor inicial (mediana da base)
+
+# 3. Descrição de cada campo
 CAMPOS = {
     "child_mort": ("Mortalidade infantil (mortes por 1.000 nascidos vivos)", 19.3),
     "exports": ("Exportações (% do PIB per capita)", 35.0),
@@ -34,19 +50,36 @@ CAMPOS = {
     "gdpp": ("PIB per capita (US$)", 4660.0),
 }
 
+
 # 4. Interface
 st.title("Classificação de países")
-st.write("Informe os indicadores do país para obter o nível de prioridade estimado pelo modelo.")
+
+st.write(
+    "Informe os indicadores do país para obter o nível de prioridade "
+    "estimado pelo modelo."
+)
 
 valores = {}
+
 esquerda, direita = st.columns(2)
+
 for i, coluna in enumerate(colunas):
     rotulo, inicial = CAMPOS[coluna]
+
     with esquerda if i % 2 == 0 else direita:
-        valores[coluna] = st.number_input(rotulo, value=inicial, key=coluna)
+        valores[coluna] = st.number_input(
+            rotulo,
+            value=inicial,
+            key=coluna
+        )
+
 
 # 5. Classificação
 if st.button("Classificar", type="primary"):
-    entrada = pd.DataFrame([valores])[colunas]   # uma linha, colunas na ordem do treinamento
-    grupo = int(modelo.predict(entrada)[0])      # o pipeline padroniza, aplica o PCA e agrupa
+
+    entrada = pd.DataFrame([valores])[colunas]
+
+    grupo = int(modelo.predict(entrada)[0])
+
     st.success(f"Grupo {grupo}: {nomes[grupo]}")
+
